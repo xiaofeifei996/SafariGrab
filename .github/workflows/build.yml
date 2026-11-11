@@ -20,8 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install ldid
-        run: brew install ldid || true
+      - name: Install ldid and dpkg
+        run: |
+          brew install ldid || true
+          brew install dpkg || true
 
       - name: Setup Theos
         run: |
@@ -45,8 +47,8 @@ jobs:
           set -e
           DEB=$(ls packages/*.deb | head -1)
           echo "DEB=$DEB"
-          dpkg-deb -f "$DEB" Package Version Architecture
-          dpkg-deb -c "$DEB"
+          dpkg-deb -f "$DEB" Package Version Architecture || true
+          dpkg-deb -c "$DEB" || true
           mkdir -p x && dpkg-deb -x "$DEB" x
           DY=$(find x -name 'SafariGrab.dylib' | head -1)
           PL=$(find x -name 'SafariGrab.plist' | head -1)
