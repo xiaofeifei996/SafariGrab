@@ -1,0 +1,61 @@
+name: Build SafariGrab DEB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: rootless
+            arch: arm64
+          - scheme: roothide
+            arch: arm64e
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ldid
+        run: brew install ldid || true
+
+      - name: Setup Theos
+        run: |
+          git clone --recursive --depth 1 https://github.com/roothide/theos.git "$GITHUB_WORKSPACE/theos"
+          mkdir -p "$GITHUB_WORKSPACE/theos/sdks"
+          curl -fL https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz -o /tmp/sdk.tar.xz
+          tar -xJf /tmp/sdk.tar.xz -C "$GITHUB_WORKSPACE/theos/sdks"
+          echo "THEOS=$GITHUB_WORKSPACE/theos" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/theos/bin" >> "$GITHUB_PATH"
+
+      - name: Build ${{ matrix.scheme }} ${{ matrix.arch }}
+        run: |
+          make clean package \
+            THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} \
+            ARCHS=${{ matrix.arch }} \
+            TARGET=iphone:clang:16.5:14.0 \
+            FINALPACKAGE=1
+
+      - name: Verify payload
+        run: |
+          set -e
+          DEB=$(ls packages/*.deb | head -1)
+          echo "DEB=$DEB"
+          dpkg-deb -f "$DEB" Package Version Architecture
+          dpkg-deb -c "$DEB"
+          mkdir -p x && dpkg-deb -x "$DEB" x
+          DY=$(find x -name 'SafariGrab.dylib' | head -1)
+          PL=$(find x -name 'SafariGrab.plist' | head -1)
+          test -n "$DY" && test -n "$PL"
+          echo "dylib: $DY"; echo "plist: $PL"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SafariGrab-${{ matrix.scheme }}-${{ matrix.arch }}
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 30
