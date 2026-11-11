@@ -193,24 +193,14 @@ static NSString *const kSGScript = @R"JS(
 static NSMutableDictionary<NSString *, SGBridge *> *gBridges;
 static char kBridgeKey;
 
-%hook WKWebView
-
-- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    WKWebView *wv = %orig;
-    if (wv && configuration) {
-        [self sg_installWithConfiguration:configuration webView:wv];
-    }
-    return wv;
-}
-
-- (void)sg_installWithConfiguration:(WKWebViewConfiguration *)configuration webView:(WKWebView *)wv {
+static void SGInstall(WKWebView *wv, WKWebViewConfiguration *configuration) {
+    if (!wv || !configuration) return;
     WKUserContentController *ucc = configuration.userContentController;
     if (!ucc) {
         ucc = [WKUserContentController new];
         configuration.userContentController = ucc;
     }
 
-    // 避免重复注入
     NSString *key = [NSString stringWithFormat:@"%p", ucc];
     if (gBridges[key]) return;
 
@@ -225,6 +215,14 @@ static char kBridgeKey;
 
     gBridges[key] = bridge;
     objc_setAssociatedObject(wv, &kBridgeKey, bridge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+%hook WKWebView
+
+- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+    WKWebView *wv = %orig;
+    SGInstall(wv, configuration);
+    return wv;
 }
 
 %end
